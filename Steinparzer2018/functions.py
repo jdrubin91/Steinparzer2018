@@ -1,13 +1,21 @@
-#===============================================================================
+__author__ = 'Jonathan D. Rubin'
+
+#==============================================================================
 #Imports
-#===============================================================================
+#==============================================================================
 import os
 import sys
 import subprocess
-#===============================================================================
+import math
+from scipy.stats import norm
+import numpy as np
+import matplotlib.pyplot as plt
+#==============================================================================
 #Functions
-#===============================================================================
-def intersect_merge_bed(bed1=None, bed2=None, tempdir=None):
+#==============================================================================
+def intersect_merge_bed(bed1=None, bed2=None, tempdir=None, 
+                        bedtools_intersect=None, bedtools_sort=None,
+                        bedtools_merge=None):
     '''Takes in two lists of bed files, each containing replicates for one 
         condition. Intersects replicates using bedtools then merges intersected
         regions.
@@ -37,8 +45,8 @@ def intersect_merge_bed(bed1=None, bed2=None, tempdir=None):
         #Build command to perform bedtools intersect on condition1 beds
         intersect1 = (bedtools_intersect + " -a " + bed1[0] + " -b " + bed1[1])
         for bedfile in bed1[2:]:
-            intersect1 = (intersect1 + " | " + bedtools_intersect + " -a stdin -b " 
-                        + bedfile)
+            intersect1 = (intersect1 + " | " + bedtools_intersect 
+                        + " -a stdin -b " + bedfile)
     else:
         intersect1 = "cat " + bed1[0]
 
@@ -46,26 +54,26 @@ def intersect_merge_bed(bed1=None, bed2=None, tempdir=None):
         #Build command to perform bedtools intersect on condition2 beds
         intersect2 = (bedtools_intersect + " -a " + bed2[0] + " -b " + bed2[1])
         for bedfile in bed2[2:]:
-            intersect2 = (intersect2 + " | " + bedtools_intersect + " -a stdin -b " 
-                        + bedfile)
+            intersect2 = (intersect2 + " | " + bedtools_intersect 
+                        + " -a stdin -b " + bedfile)
     else:
         intersect2 = "cat " + bed2[0]
 
     #Build full command which pipes both intersect commands into cat, then 
     # sorts and merges this resulting bed file
     command = ("cat <(" + intersect1 + ") <(" + intersect2 
-                + ") | "+bedtools_sort+" -i stdin | "+bedtools_merge+" -i stdin > " 
-                + combined_input_merged_bed)
+                + ") | "+bedtools_sort+" -i stdin | " + bedtools_merge 
+                + " -i stdin > " + combined_input_merged_bed)
     
     #Need to use subprocess here because this command is bash not shell
     subprocess.call(['bash', '-c', command])
 
     return combined_input_merged_bed
-#===============================================================================
+#==============================================================================
 
-#===============================================================================
+#==============================================================================
 def count_reads(bedfile=None, bam1=None, bam2=None, tempdir=None, label1=None, 
-                label2=None):
+                label2=None, bedtools_multicov=None):
     '''Counts reads across regions in a given bed file using bam files inputted
         by a user
 
@@ -100,11 +108,13 @@ def count_reads(bedfile=None, bam1=None, bam2=None, tempdir=None, label1=None,
     #BAMs for given regions in BED
     os.system(bedtools_multicov + " -bams " + " ".join(bam1) + " " 
                 + " ".join(bam2) + " -bed " + bedfile + " > " 
-                + os.path.join(tempdir, label1 + "_" + label2 + ".count_file.bed"))
+                + os.path.join(tempdir, 
+                    label1 + "_" + label2 + ".count_file.bed"))
 
     #This section adds a header to the count_file and reformats it to remove 
     #excess information and add a column with the region for later use
-    count_file = os.path.join(tempdir, label1 + "_" + label2 + ".count_file.header.bed")
+    count_file = os.path.join(tempdir, 
+                    label1 + "_" + label2 + ".count_file.header.bed")
     outfile = open(count_file,'w')
     outfile.write("chrom\tstart\tstop\tregion\t" 
                     + '\t'.join([label1]*len(bam1)) + "\t" 
@@ -120,9 +130,9 @@ def count_reads(bedfile=None, bam1=None, bam2=None, tempdir=None, label1=None,
                             + '\t'.join(counts) + "\n")
 
     return count_file
-#===============================================================================
+#==============================================================================
 
-#===============================================================================
+#==============================================================================
 def write_deseq_script(bam1=None, bam2=None, tempdir=None, count_file=None, 
                         label1=None, label2=None):
     '''Writes an R script within the tempdir directory in TFEA output to run 
@@ -195,7 +205,8 @@ def write_deseq_script(bam1=None, bam2=None, tempdir=None, count_file=None,
         outfile.write('resShrink$fc <- 2^(resShrink$log2FoldChange)\n')
         outfile.write('res <- resShrink[c(1:3,7,4:6)]\n')
         outfile.write('write.table(res, file = "'
-                        + os.path.join(tempdir, label1 + '_' + label2 + '.DESeq.res.txt') 
+                        + os.path.join(tempdir, 
+                            label1 + '_' + label2 + '.DESeq.res.txt') 
                         + '", append = FALSE, sep= "\t" )\n')
         outfile.write('sink()')
     else:
@@ -224,20 +235,24 @@ def write_deseq_script(bam1=None, bam2=None, tempdir=None, count_file=None,
         outfile.write('res <- nbinomTest( cds, "'+label1+'", "'+label2+'" )\n')
         outfile.write('rownames(res) <- res$id\n')                      
         outfile.write('write.table(res, file = "'
-                        + os.path.join(tempdir,label1 + '_' + label2 + '.DESeq.res.txt') 
+                        + os.path.join(tempdir,
+                            label1 + '_' + label2 + '.DESeq.res.txt') 
                         + '", append = FALSE, sep= "\t" )\n')
 
         outfile.write('sink()')
     outfile.close()
-#===============================================================================
+#==============================================================================
 
-#===============================================================================
-def pull_individual_regions(condition_names=None, padj_cutoff=False, percentage_rank_cutoff=False, 
-                            bed_file=None, original_beds=None, padj_column=-3):
+#==============================================================================
+def pull_individual_regions(condition_names=None, padj_cutoff=False, 
+                            percentage_rank_cutoff=False, bed_file=None, 
+                            original_beds=None, padj_column=-3,
+                            bedtools_intersect=None):
     if padj_cutoff != False:
         outfilename = './differential_padj-' + str(padj_cutoff) + '.bed'
     elif percentage_rank_cutoff != False:
-        outfilename = './differential_percent-' + str(percentage_rank_cutoff) + '.bed'
+        outfilename = ('./differential_percent-' + str(percentage_rank_cutoff) 
+                        + '.bed')
     else:
         sys.exit("One of padj_cutoff or percentage_rank_cutoff must not be False")
     outfile = open(outfilename,'w')
@@ -265,14 +280,15 @@ def pull_individual_regions(condition_names=None, padj_cutoff=False, percentage_
         bed = original_beds[i]
         label = condition_names[i]
         outbed = os.path.join(src_path, label + '_differential.bed')
-        command = bedtools_intersect + ' -wb -a ' + outfilename + ' -b ' + bed + ' > ' + outbed
+        command = bedtools_intersect + ' -wb -a ' + outfilename 
+                    + ' -b ' + bed + ' > ' + outbed
         subprocess.call(command, shell=True)
         outbeds.append(outbed)
         
     return outbeds
-#===============================================================================
+#==============================================================================
 
-#===============================================================================
+#==============================================================================
 def parse_deseq_file(deseq_file=None, condition1=None, condition2=None, 
                     output_folder=None):
     output_file = os.path.join(output_folder, condition1 + '_' + condition2 + '.deseq.bed')
@@ -288,36 +304,23 @@ def parse_deseq_file(deseq_file=None, condition1=None, condition2=None,
                 if pvalue == 'NA':
                     pvalue = '1.0'
                 outfile.write('\t'.join([chrom, start, stop, pvalue]) + '\n')
-#===============================================================================
+#==============================================================================
 
-#===============================================================================
+#==============================================================================
 
 
 #Initialization module from MDS_Differentially_Transcribed
-#====================================================================================================================
+#==============================================================================
 #Paths
-#====================================================================================================================
-#Path to the folder containing this notebook
-src_path = '/Users/joru1876/InterferonResponseJupyter/'
+#==============================================================================
 
-#Path to the MDS package src
-MDS_src = '/scratch/Users/joru1876/MDS/src/MDS'
-#====================================================================================================================
-#Imports
-#====================================================================================================================
-import os
-import sys
-import subprocess
-import math
-from scipy.stats import norm
-import numpy as np
-import matplotlib.pyplot as plt
-#====================================================================================================================
+
+#==============================================================================
 #Functions
-#====================================================================================================================
+#==============================================================================
 def pull_individual_regions(condition_names=None, padj_cutoff=False, percentage_rank_cutoff=False, 
                             bed_file=None, original_beds=None, padj_column=-1,
-                            bedtoolsintersect='/opt/bedtools/2.25.0/bin/intersectBed'):
+                            bedtools_intersect=None):
     if padj_cutoff != False:
         outfilename = './differential_padj-' + str(padj_cutoff) + '.bed'
     elif percentage_rank_cutoff != False:
