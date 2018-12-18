@@ -7,6 +7,7 @@ import os
 import sys
 import subprocess
 import math
+from scipy.stats import norm
 import numpy as np
 import matplotlib.pyplot as plt
 #==============================================================================
@@ -269,15 +270,59 @@ def parse_deseq_file(deseq_file=None, condition1=None, condition2=None,
                     pvalue = '1.0'
                 outfile.write('\t'.join([chrom, start, stop, pvalue]) + '\n')
 
+def pull_regions_from_comparisons(comparisons=None, padj_cutoff=False, 
+                                    percentage_rank_cutoff=False, 
+                                    output_folder=None,  padj_column=None,
+                                    bedtools_intersect=None):
+    print("Retrieving individual regions from merged bed file...")
+    for condition_names in comparisons:
+        condition1, condition2 = condition_names
+        print('\t', condition1, 'vs.', condition2)
+        bed_file = os.path.join(output_folder, 
+                    condition1 + '_' + condition2 + '.deseq.bed')
+        original_beds = (os.path.join(output_folder, 
+                                        condition1 
+                                        + ".bidir_predictions.intersect.bed"),
+                        os.path.join(output_folder, 
+                                        condition2 
+                                        + ".bidir_predictions.intersect.bed"))
+        pull_individual_regions(condition_names=condition_names, 
+                                padj_cutoff=padj_cutoff, 
+                                percentage_rank_cutoff=percentage_rank_cutoff, 
+                                bed_file=bed_file, original_beds=original_beds,
+                                padj_column=padj_column,
+                                bedtoolsintersect=bedtools_intersect, 
+                                output_folder=output_folder) 
+
 def pull_individual_regions(condition_names=None, padj_cutoff=False, 
                             percentage_rank_cutoff=False, bed_file=None, 
                             original_beds=None, padj_column=None,
-                            bedtoolsintersect=None):
+                            bedtoolsintersect=None, output_folder=None):
+    '''Takes an intersected/merged bed file of regions and splits it up into
+        regions originating from each specified condition.
+
+        Parameters
+        ----------
+        condition_names : tuple
+            a tuple of exactly two strings corresponding to the condition
+            names for the comparison to be analyzed.
+        bed_file : string
+            full path to the intersected/merged bed file
+        original_beds : tuple
+            a tuple with exactly two strings that correspond to replicate 
+            intersected bed files from the original conditions
+
+    '''
     if padj_cutoff != False:
-        outfilename = './differential_padj-' + str(padj_cutoff) + '.bed'
+        outfilename = os.path.join(output_folder, 
+                                    '_'.join(condition_names) 
+                                    + '.differential_padj-' 
+                                    + str(padj_cutoff) + '.bed')
     elif percentage_rank_cutoff != False:
-        outfilename = ('./differential_percent-' + str(percentage_rank_cutoff) 
-                        + '.bed')
+        outfilename = os.path.join(output_folder, 
+                                    '_'.join(condition_names) 
+                                    + '.differential_percent-' 
+                                    + str(percentage_rank_cutoff) + '.bed')
     else:
         sys.exit("One of padj_cutoff or percentage_rank_cutoff must not be False")
     outfile = open(outfilename,'w')
@@ -304,23 +349,135 @@ def pull_individual_regions(condition_names=None, padj_cutoff=False,
     for i in range(len(original_beds)):
         bed = original_beds[i]
         label = condition_names[i]
-        outbed = os.path.join(src_path, label + '_differential.bed')
-        command = bedtoolsintersect + ' -wb -a ' + outfilename + ' -b ' + bed + ' > ' + outbed
+        outbed = os.path.join(output_folder, 
+                                '_'.join(condition_names) 
+                                + '.' + label 
+                                + '.differential.bed')
+        command = (bedtoolsintersect + ' -wb -a ' + outfilename 
+                    + ' -b ' + bed + ' > ' + outbed)
         subprocess.call(command, shell=True)
         outbeds.append(outbed)
-        
-    return outbeds
+
+def run_MDS_from_comparisons(comparisons=None, output_folder=None, 
+                                MDS_src=None, fasta_file=None, PSSM_DB=None):
+    print("Performing MDS analysis for each condition from given regions...")
+    for condition_names in comparisons:
+        for label in condition_names:
+            print('\t', ' vs. '.join(condition_names), ':', label)
+            bed = os.path.join(output_folder, 
+                                    '_'.join(condition_names) 
+                                    + '.' + label 
+                                    + '.differential.bed')
+            ID = '_'.join(condition_names) + '.' + label + '.MDS'
+            run_MDS(MDS_src=MDS_src, bed=bed, fasta_file=fasta_file, 
+                        PSSM_DB=PSSM_DB, output_folder=output_folder, ID=ID)
 
 def run_MDS(MDS_src=None, bed=None, fasta_file=None, PSSM_DB=None, 
-            src_path=None, ID=None, bsn='150', H='1500', pv='0.000001'):
+            output_folder=None, ID=None, bsn='150', H='1500', pv='0.000001'):
     MDS_command = [MDS_src, 'EVAL', 
                     '-bed', bed, 
                     '-fasta', fasta_file, 
                     '-DB', PSSM_DB, 
-                    '-o', src_path,
-                    '-log_out', src_path,
+                    '-o', output_folder,
+                    '-log_out', output_folder,
                     '-ID', ID,
                     '-bsn',bsn,
                     '-H', H,
                     '-pv', pv]
     subprocess.call(MDS_command)
+
+def compute_MDS(histlist):
+    '''Takes in a list of ints and returns h/H and H
+    '''
+    windowsize = 150
+    H = sum(histlist)
+    middle = int(len(histlist)/2)
+    h = sum(histlist[middle-windowsize:middle]) + sum(histlist[middle:middle+windowsize])
+    if H != 0:
+        return float(h)/float(H), H
+    else:
+        return 0,0
+
+def MDS(MDS1=None, MDS2=None):
+    d = dict()
+    with open(MDS1) as F:
+        F.readline()
+        for line in F:
+            line = line.strip().split(',')
+            # line = line.strip().split('\t')
+            md,H = compute_MDS([int(x) for x in line[1:]])
+            d[line[0]] = [md,H]
+
+    with open(MDS2) as F:
+        F.readline()
+        for line in F:
+            line = line.strip().split(',')
+            # line = line.strip().split('\t')
+            md,H = compute_MDS([int(x) for x in line[1:]])
+            d[line[0]].append(md)
+            d[line[0]].append(H)
+    
+
+    X = [0] * len(d)
+    Y = [0] * len(d)
+    pvals = [0] * len(d)
+    genelist = [''] * len(d)
+    diff = list()
+    for key in d:
+        mdk=d[key][0]
+        mdj=d[key][2]
+        diff.append(float(mdj)-float(mdk))
+    mean = sum(diff)/len(diff)
+    i = 0
+    for key in d:
+        mdk=float(d[key][0])
+        mdj=float(d[key][2])
+        Nk=float(d[key][1])
+        Nj=float(d[key][3])
+        if Nj > 10 and Nk > 10:
+            p=((mdj*Nj)+(mdk*Nk))/(Nj+Nk)
+            SE=(p*(1-p))*((1/Nj)+(1/Nk))
+            Y[i] = mdj-mdk-mean
+            X[i] = math.log((Nj+Nk)/2.0,10)
+            genelist[i] = key.split('.')[0].split('_')[0]+'_'+key.split('.')[-2]
+            try:
+                z = (mdj-mdk-mean)/math.sqrt(SE)
+            except ZeroDivisionError:
+                z=0
+            cdf=norm.cdf(z,0,1)
+            p=min(cdf,1-cdf)*2
+            pvals[i] = p
+        i += 1
+        
+    return X, Y, pvals, genelist
+
+def write_MDS_output(genelist=None, X=None, Y=None ,p_vals=None, 
+                        output=None):
+    sorted_data = [(p,x,y,g) for p,x,y,g in sorted(zip(p_vals,X,Y,genelist))]
+    with open(output, 'w') as outfile:
+        outfile.write('TF\tMDS_difference\tLog10Events\tp-value\n')
+        for i in range(len(X)):
+            outfile.write('\t'.join(sorted_data[3][i],
+                                    str(sorted_data[1][i]),
+                                    str(sorted_data[2][i]),
+                                    str(sorted_data[0][i])) + '\n')
+
+def parse_MDS_output(input=None):
+    genelist = list()
+    p_vals = list()
+    x = list()
+    y = list()
+    with open(input) as F:
+        F.readline()
+        for line in F:
+            line = line.strip('\n').split('\t')
+            genelist.append(line[0])
+            x.append(float(line[1]))
+            y.append(float(line[2]))
+            p_vals.append(float(line[3]))
+    
+    return x, y, genelist, p_vals
+
+def plot_heatmap(condition_names=None, motif=None, ax=None):
+    return None
+
