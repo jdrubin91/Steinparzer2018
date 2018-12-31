@@ -1,0 +1,15 @@
+sink("/Users/joru1876/InterferonResponseJupyter/Steinparzer2018/Data/DESeq.Rout")
+library("DESeq2")
+data <- read.delim("/Users/joru1876/InterferonResponseJupyter/Steinparzer2018/Data/MEF_30_IFN_DMSO_MEF_30_IFN_CA.count_file.header.bed", sep="	",                         header=TRUE)
+countsTable <- subset(data, select=c(5, 6, 7, 8))
+rownames(countsTable) <- data$region
+conds <- as.data.frame(c("MEF_30_IFN_DMSO", "MEF_30_IFN_DMSO", "MEF_30_IFN_CA", "MEF_30_IFN_CA"))
+colnames(conds) <- c("treatment")
+ddsFullCountTable <- DESeqDataSetFromMatrix(                                                    countData = countsTable,                                                     colData = conds,                                                     design = ~ treatment)
+dds <- DESeq(ddsFullCountTable)
+res1 <- results(dds,alpha = 0.05,                                         contrast=c("treatment",                                                        "MEF_30_IFN_CA",                                                        "MEF_30_IFN_DMSO"))                                                        
+resShrink <- lfcShrink(dds, res = res1,                                                 contrast = c("treatment",                                                "MEF_30_IFN_CA",                                                "MEF_30_IFN_DMSO"))
+resShrink$fc <- 2^(resShrink$log2FoldChange)
+res <- resShrink[c(1:3,7,4:6)]
+write.table(res, file = "/Users/joru1876/InterferonResponseJupyter/Steinparzer2018/Data/MEF_30_IFN_DMSO_MEF_30_IFN_CA.DESeq.res.txt", append = FALSE, sep= "	" )
+sink()

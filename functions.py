@@ -9,7 +9,9 @@ import subprocess
 import math
 from scipy.stats import norm
 import numpy as np
+import matplotlib as mpl
 import matplotlib.pyplot as plt
+import matplotlib.cm as cm
 #==============================================================================
 #Functions
 #==============================================================================
@@ -453,21 +455,21 @@ def MDS(MDS1=None, MDS2=None):
 
 def write_MDS_output(genelist=None, X=None, Y=None ,p_vals=None, 
                         output=None):
-    sorted_data = [(p,x,y,g) for p,x,y,g in sorted(zip(p_vals,X,Y,genelist))]
+    sorted_data = [(p,x,y,g) for p,x,y,g in sorted(zip(p_vals,X,Y,genelist)) if len(g) > 1]
     with open(output, 'w') as outfile:
-        outfile.write('TF\tMDS_difference\tLog10Events\tp-value\n')
-        for i in range(len(X)):
-            outfile.write('\t'.join(sorted_data[3][i],
-                                    str(sorted_data[1][i]),
-                                    str(sorted_data[2][i]),
-                                    str(sorted_data[0][i])) + '\n')
+        outfile.write('TF\tLog10Events\tMDS_difference\tp-value\n')
+        for i in range(len(sorted_data)):
+            outfile.write('\t'.join([sorted_data[i][3],
+                                    str(sorted_data[i][1]),
+                                    str(sorted_data[i][2]),
+                                    str(sorted_data[i][0])]) + '\n')
 
-def parse_MDS_output(input=None):
+def parse_MDS_output(input_file=None):
     genelist = list()
     p_vals = list()
     x = list()
     y = list()
-    with open(input) as F:
+    with open(input_file) as F:
         F.readline()
         for line in F:
             line = line.strip('\n').split('\t')
@@ -478,6 +480,134 @@ def parse_MDS_output(input=None):
     
     return x, y, genelist, p_vals
 
-def plot_heatmap(condition_names=None, motif=None, ax=None):
-    return None
+def print_MDS(condition1=None, condition2=None, output_folder=None, 
+                pval_cut=None, n=None, motif=None):
+    input_file = os.path.join(output_folder, 
+                            '_'.join([condition1, condition2])
+                            + '.MDS_diff.txt')
+    x, y, genelist, p_vals = parse_MDS_output(input_file=input_file)
+    print('TF\tLog10Events\tMDS_difference\tp-value')
+    if pval_cut != None:
+        for i in range(len(p_vals)):
+            p = p_vals[i]
+            if p < pval_cut:
+                print(genelist[i], x[i], y[i], p_vals[i])
+    if n != None:
+        for i in range(len(p_vals)):
+            if i <= n:
+                print(genelist[i], x[i], y[i], p_vals[i])
+    
+    if motif != None:
+        for i in range(len(genelist)):
+            if motif in genelist[i]:
+                print(genelist[i], x[i], y[i], p_vals[i])
 
+def plot_MA(condition1=None, condition2=None, output_folder=None, ax=None, 
+            pval_cut=0.01, label=False):
+    input_file = os.path.join(output_folder, 
+                            '_'.join([condition1, condition2])
+                            + '.MDS_diff.txt')
+    x, y, genelist, p_vals = parse_MDS_output(input_file=input_file)
+    upx = [x1 for x1,y1,p in zip(x,y,p_vals) if p < pval_cut and y1 > 0]
+    upy = [y1 for x1,y1,p in zip(x,y,p_vals) if p < pval_cut and y1 > 0]
+    dnx = [x1 for x1,y1,p in zip(x,y,p_vals) if p < pval_cut and y1 < 0]
+    dny = [y1 for x1,y1,p in zip(x,y,p_vals) if p < pval_cut and y1 < 0]
+    ax.scatter(x,y, c="k", edgecolor="", s=30)
+    ax.scatter(upx, upy, c="r", edgecolor="", s=30)
+    ax.scatter(dnx, dny, c="g", edgecolor="", s=30)
+    if label != False:
+        lbx = [x1 for x1,y1,g in zip(x,y,genelist) if label in g]
+        lby = [y1 for x1,y1,g in zip(x,y,genelist) if label in g]
+        ax.scatter(lbx, lby, c="orange", edgecolor="", s=30)
+    ax.set_title(condition1 + " vs. " + condition2)
+    ax.set_ylabel('MD Score Difference')
+    ax.set_xlabel('Mean Overlap Events (log10)')
+
+def plot_heatmap(input_file=None, motif=None, ax=None):
+    with open(input_file) as file1:
+        for line in file1:
+            line = line.strip('\n').split(',')
+            TF = line[0]
+            if TF == motif:
+                #Data in the form of a histogram with motif counts per bp
+                x = [float(x) for x in line[1:]]
+
+                window_size = len(x)/2
+
+                bins=100
+                edges = np.linspace(-window_size, window_size, bins+1)
+                
+                counts = np.zeros(bins)
+                window = int(len(x)/bins)
+                for i in range(bins):
+                    j = i*window
+                    average = sum(x[j:j+window])
+                    counts[i] = average
+
+                # counts, edges = np.histogram(x, bins=bins)
+                edges        = (edges[1:]+edges[:-1])/2. 
+                ax.bar(edges, counts, width=(edges[-1]-edges[0])/bins)
+            
+                norm    = mpl.colors.Normalize(vmin=min(counts), vmax=max(counts))
+                cmap    = cm.Blues
+                m       = cm.ScalarMappable(norm=norm, cmap=cmap)
+                colors  = [m.to_rgba(c) for c in counts] 
+
+                # print(colors)
+                
+                ax.bar(edges, np.ones((len(edges),)), color=colors, 
+                        width=(edges[-1]-edges[0])/len(edges),
+                        edgecolor=colors)
+                ax.set_xlim(-1500, 1500)
+                ax.set_ylim(0, 1)
+                ax.set_title(input_file.split('.')[-3] 
+                                + " (n=" + str(sum(x)) + ")")
+                ax.tick_params(
+                    axis='x',          # changes apply to the x-axis
+                    which='both',      # both major and minor ticks are affected
+                    bottom='off',      # ticks along the bottom edge are off
+                    top='off',         # ticks along the top edge are off
+                    labelbottom='on') # labels along the bottom edge are off
+                ax.tick_params(
+                    axis='y',          # changes apply to the x-axis
+                    which='both',      # both major and minor ticks are affected
+                    right='off',      # ticks along the bottom edge are off
+                    left='off',         # ticks along the top edge are off
+                    labelbottom='off',
+                    labelleft='off') 
+                    
+
+
+if __name__ == "__main__":
+    import matplotlib.gridspec as gridspec
+    import numpy as np
+
+    F = plt.figure(figsize=(15,15))
+    outer = gridspec.GridSpec(2, 2, wspace=0.2, hspace=0.2)
+
+    inner = gridspec.GridSpecFromSubplotSpec(2, 1,
+                        subplot_spec=outer[0], wspace=0.1, hspace=0.1)
+
+    ax = plt.Subplot(F, inner[0])
+    F.add_subplot(ax)
+    x = range(-1500,1500)
+                
+    bins=100
+    # counts, edges = np.histogram(x, bins=bins)
+    edges = np.linspace(-1500,1500,101)
+    counts = range(100)
+    edges        = (edges[1:]+edges[:-1])/2. 
+    ax.bar(edges, counts, width=(edges[-1] - edges[0])/bins  )
+
+    norm    = mpl.colors.Normalize(vmin=min(counts), vmax=max(counts))
+    cmap    = cm.Blues
+    m       = cm.ScalarMappable(norm=norm, cmap=cmap)
+    colors  = [m.to_rgba(c) for c in counts] 
+    
+    ax.bar(edges,np.ones((len(edges),)), color=colors, 
+            width=(edges[-1]-edges[0])/len(edges),
+            edgecolor=colors )
+    ax.set_xlim(-1500, 1500)
+    ax.set_ylim(0, 1)
+
+    plt.show()
