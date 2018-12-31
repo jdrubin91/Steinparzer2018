@@ -458,7 +458,11 @@ def write_MDS_output(genelist=None, X=None, Y=None ,p_vals=None,
     sorted_data = [(p,x,y,g) for p,x,y,g in sorted(zip(p_vals,X,Y,genelist)) if len(g) > 1]
     with open(output, 'w') as outfile:
         outfile.write('TF\tLog10Events\tMDS_difference\tp-value\n')
+<<<<<<< HEAD
         for i in range(len(sorted_data)):
+=======
+        for i in range(len(X)):
+>>>>>>> ff222d89782f2fec243caa8b18c03b7823a7a1d7
             outfile.write('\t'.join([sorted_data[i][3],
                                     str(sorted_data[i][1]),
                                     str(sorted_data[i][2]),
@@ -481,7 +485,11 @@ def parse_MDS_output(input_file=None):
     return x, y, genelist, p_vals
 
 def print_MDS(condition1=None, condition2=None, output_folder=None, 
+<<<<<<< HEAD
                 pval_cut=None, n=None, motif=None):
+=======
+                pval_cut=None, n=None):
+>>>>>>> ff222d89782f2fec243caa8b18c03b7823a7a1d7
     input_file = os.path.join(output_folder, 
                             '_'.join([condition1, condition2])
                             + '.MDS_diff.txt')
@@ -496,11 +504,14 @@ def print_MDS(condition1=None, condition2=None, output_folder=None,
         for i in range(len(p_vals)):
             if i <= n:
                 print(genelist[i], x[i], y[i], p_vals[i])
+<<<<<<< HEAD
     
     if motif != None:
         for i in range(len(genelist)):
             if motif in genelist[i]:
                 print(genelist[i], x[i], y[i], p_vals[i])
+=======
+>>>>>>> ff222d89782f2fec243caa8b18c03b7823a7a1d7
 
 def plot_MA(condition1=None, condition2=None, output_folder=None, ax=None, 
             pval_cut=0.01, label=False):
@@ -523,6 +534,7 @@ def plot_MA(condition1=None, condition2=None, output_folder=None, ax=None,
     ax.set_ylabel('MD Score Difference')
     ax.set_xlabel('Mean Overlap Events (log10)')
 
+<<<<<<< HEAD
 def plot_heatmap(input_file=None, motif=None, ax=None):
     with open(input_file) as file1:
         for line in file1:
@@ -609,5 +621,9 @@ if __name__ == "__main__":
             edgecolor=colors )
     ax.set_xlim(-1500, 1500)
     ax.set_ylim(0, 1)
+=======
+def plot_heatmap(condition1=None, condition2=None, motif=None, ax=None):
+    return None
+>>>>>>> ff222d89782f2fec243caa8b18c03b7823a7a1d7
 
     plt.show()

@@ -4,11 +4,15 @@ __author__ = 'Jonathan D. Rubin'
 #Imports
 #==============================================================================
 import os
+<<<<<<< HEAD
 import math
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 
+=======
+>>>>>>> ff222d89782f2fec243caa8b18c03b7823a7a1d7
 import functions
+import matplotlib.pyplot as plt
 
 def differential_transcription(comparisons=None, raw_data=None, 
                                 bedtools_intersect=None, 
@@ -72,7 +76,11 @@ def differential_MDS(comparisons=None, output_folder=None):
 def MA_plot_figure(comparisons=None, output_folder=None, save=False, 
                     label=False):
     F = plt.figure(figsize=(15,15))
+<<<<<<< HEAD
     subplot_n = math.ceil(len(comparisons)/2)
+=======
+    subplot_n = int(len(comparisons)/2)
+>>>>>>> ff222d89782f2fec243caa8b18c03b7823a7a1d7
     for i, (condition1, condition2) in enumerate(comparisons):
         subplot = (subplot_n*100) + (subplot_n*10) + i + 1
         ax = F.add_subplot(subplot)
@@ -85,6 +93,7 @@ def MA_plot_figure(comparisons=None, output_folder=None, save=False,
                                                 + '.MA-plot.svg')
         plt.savefig(save_path)
 
+<<<<<<< HEAD
 def heatmap_plot_figure(comparisons=None, output_folder=None, save=False, 
                         motif=None):
 
@@ -118,6 +127,9 @@ def heatmap_plot_figure(comparisons=None, output_folder=None, save=False,
                                                 + '.heatmaps.svg')
         plt.savefig(save_path)
     plt.show()
+=======
+
+>>>>>>> ff222d89782f2fec243caa8b18c03b7823a7a1d7
 
 if __name__ == "__main__":
     differential_transcription()
