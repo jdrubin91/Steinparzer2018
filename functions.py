@@ -455,19 +455,19 @@ def write_MDS_output(genelist=None, X=None, Y=None ,p_vals=None,
                         output=None):
     sorted_data = [(p,x,y,g) for p,x,y,g in sorted(zip(p_vals,X,Y,genelist))]
     with open(output, 'w') as outfile:
-        outfile.write('TF\tMDS_difference\tLog10Events\tp-value\n')
+        outfile.write('TF\tLog10Events\tMDS_difference\tp-value\n')
         for i in range(len(X)):
-            outfile.write('\t'.join(sorted_data[3][i],
-                                    str(sorted_data[1][i]),
-                                    str(sorted_data[2][i]),
-                                    str(sorted_data[0][i])) + '\n')
+            outfile.write('\t'.join([sorted_data[i][3],
+                                    str(sorted_data[i][1]),
+                                    str(sorted_data[i][2]),
+                                    str(sorted_data[i][0])]) + '\n')
 
-def parse_MDS_output(input=None):
+def parse_MDS_output(input_file=None):
     genelist = list()
     p_vals = list()
     x = list()
     y = list()
-    with open(input) as F:
+    with open(input_file) as F:
         F.readline()
         for line in F:
             line = line.strip('\n').split('\t')
@@ -478,6 +478,44 @@ def parse_MDS_output(input=None):
     
     return x, y, genelist, p_vals
 
-def plot_heatmap(condition_names=None, motif=None, ax=None):
+def print_MDS(condition1=None, condition2=None, output_folder=None, 
+                pval_cut=None, n=None):
+    input_file = os.path.join(output_folder, 
+                            '_'.join([condition1, condition2])
+                            + '.MDS_diff.txt')
+    x, y, genelist, p_vals = parse_MDS_output(input_file=input_file)
+    print('TF\tLog10Events\tMDS_difference\tp-value')
+    if pval_cut != None:
+        for i in range(len(p_vals)):
+            p = p_vals[i]
+            if p < pval_cut:
+                print(genelist[i], x[i], y[i], p_vals[i])
+    if n != None:
+        for i in range(len(p_vals)):
+            if i <= n:
+                print(genelist[i], x[i], y[i], p_vals[i])
+
+def plot_MA(condition1=None, condition2=None, output_folder=None, ax=None, 
+            pval_cut=0.01, label=False):
+    input_file = os.path.join(output_folder, 
+                            '_'.join([condition1, condition2])
+                            + '.MDS_diff.txt')
+    x, y, genelist, p_vals = parse_MDS_output(input_file=input_file)
+    upx = [x1 for x1,y1,p in zip(x,y,p_vals) if p < pval_cut and y1 > 0]
+    upy = [y1 for x1,y1,p in zip(x,y,p_vals) if p < pval_cut and y1 > 0]
+    dnx = [x1 for x1,y1,p in zip(x,y,p_vals) if p < pval_cut and y1 < 0]
+    dny = [y1 for x1,y1,p in zip(x,y,p_vals) if p < pval_cut and y1 < 0]
+    ax.scatter(x,y, c="k", edgecolor="", s=30)
+    ax.scatter(upx, upy, c="r", edgecolor="", s=30)
+    ax.scatter(dnx, dny, c="g", edgecolor="", s=30)
+    if label != False:
+        lbx = [x1 for x1,y1,g in zip(x,y,genelist) if label in g]
+        lby = [y1 for x1,y1,g in zip(x,y,genelist) if label in g]
+        ax.scatter(lbx, lby, c="orange", edgecolor="", s=30)
+    ax.set_title(condition1 + " vs. " + condition2)
+    ax.set_ylabel('MD Score Difference')
+    ax.set_xlabel('Mean Overlap Events (log10)')
+
+def plot_heatmap(condition1=None, condition2=None, motif=None, ax=None):
     return None
 
