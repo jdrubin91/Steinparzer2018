@@ -4,13 +4,10 @@ __author__ = 'Jonathan D. Rubin'
 #Imports
 #==============================================================================
 import os
-<<<<<<< HEAD
 import math
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 
-=======
->>>>>>> ff222d89782f2fec243caa8b18c03b7823a7a1d7
 import functions
 import matplotlib.pyplot as plt
 
@@ -74,18 +71,15 @@ def differential_MDS(comparisons=None, output_folder=None):
                             output=output)
 
 def MA_plot_figure(comparisons=None, output_folder=None, save=False, 
-                    label=False):
+                    label=False, pval_cut=0.01):
+    subplot_n = math.ceil(len(comparisons)/3)
     F = plt.figure(figsize=(15,15))
-<<<<<<< HEAD
-    subplot_n = math.ceil(len(comparisons)/2)
-=======
-    subplot_n = int(len(comparisons)/2)
->>>>>>> ff222d89782f2fec243caa8b18c03b7823a7a1d7
     for i, (condition1, condition2) in enumerate(comparisons):
-        subplot = (subplot_n*100) + (subplot_n*10) + i + 1
+        subplot = (subplot_n*100) + 30 + i + 1
         ax = F.add_subplot(subplot)
         functions.plot_MA(condition1=condition1, condition2=condition2, 
-                            output_folder=output_folder, ax=ax, label=label)
+                            output_folder=output_folder, ax=ax, label=label,
+                            pval_cut=pval_cut)
     plt.tight_layout()
     plt.show()
     if save:
@@ -93,7 +87,6 @@ def MA_plot_figure(comparisons=None, output_folder=None, save=False,
                                                 + '.MA-plot.svg')
         plt.savefig(save_path)
 
-<<<<<<< HEAD
 def heatmap_plot_figure(comparisons=None, output_folder=None, save=False, 
                         motif=None):
 
@@ -127,9 +120,6 @@ def heatmap_plot_figure(comparisons=None, output_folder=None, save=False,
                                                 + '.heatmaps.svg')
         plt.savefig(save_path)
     plt.show()
-=======
-
->>>>>>> ff222d89782f2fec243caa8b18c03b7823a7a1d7
 
 if __name__ == "__main__":
     differential_transcription()
